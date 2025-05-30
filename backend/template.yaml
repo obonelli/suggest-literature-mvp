@@ -1,41 +1,89 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  backend
+Description: backend – /suggest-literature y /booking
 
-  Sample SAM Template for backend
-  
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Runtime: nodejs18.x
+    Timeout: 6
+
+Parameters:
+  OpenAIKey:
+    Type: String
+    Description: OpenAI API key (sk-…)
+    Default: dummy
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  ##########################
+  # HTTP API con CORS
+  ##########################
+  AppHttpApi:
+    Type: AWS::Serverless::HttpApi
     Properties:
-      CodeUri: hello-world/
-      Handler: app.lambdaHandler
-      Runtime: nodejs18.x
-      Architectures:
-        - x86_64
+      CorsConfiguration:
+        AllowOrigins:
+          - http://localhost:5174
+          - https://storage-sizer-demo.vercel.app
+        AllowMethods: ["POST", "OPTIONS"]
+        AllowHeaders: ["Content-Type"]
+
+  #######################################
+  # DynamoDB tabla bookings
+  #######################################
+  BookingsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: bookings
+      PrimaryKey:
+        Name: bookingId
+        Type: String
+
+  ############################################
+  # Lambda GenAI  –  POST /suggest-literature
+  ############################################
+  SuggestLiteratureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: suggest-literature/
+      Handler: suggestLiterature.handler
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Ref OpenAIKey
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        Api:
+          Type: HttpApi
           Properties:
-            Path: /hello
-            Method: get
+            ApiId: !Ref AppHttpApi
+            Path: /suggest-literature
+            Method: post
+
+  ###########################################
+  # Lambda booking  –  POST /booking
+  ###########################################
+  BookUnitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: book-unit.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BookingsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BookingsTable
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /booking
+            Method: post
 
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  SuggestLiteratureApi:
+    Description: URL /suggest-literature
+    Value: !Sub "https://${AppHttpApi}.execute-api.${AWS::Region}.amazonaws.com/suggest-literature"
+
+  BookUnitApi:
+    Description: URL /booking
+    Value: !Sub "https://${AppHttpApi}.execute-api.${AWS::Region}.amazonaws.com/booking"

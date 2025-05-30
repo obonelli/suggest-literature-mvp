@@ -1,0 +1,13 @@
+{
+    "name": "backend",
+    "version": "1.0.0",
+    "description": "Lambdas para /suggest-literature y /booking",
+    "main": "book-unit.js",
+    "scripts": {
+        "test": "echo \"no tests\""
+    },
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.530.0",
+        "openai": "^4.103.0"
+    }
+}
